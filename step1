@@ -1,0 +1,136 @@
+import sqlite3
+import tkinter as tk
+from tkinter import ttk, messagebox
+from datetime import date
+
+# Database setup
+def init_db():
+    conn = sqlite3.connect("expenses.db")
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS expenses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    notes TEXT
+                )''')
+    conn.commit()
+    conn.close()
+
+# Add expense
+def add_expense():
+    exp_date = entry_date.get()
+    category = entry_category.get()
+    amount = entry_amount.get()
+    notes = entry_notes.get()
+
+    if not exp_date or not category or not amount:
+        messagebox.showerror("Error", "Please fill all required fields.")
+        return
+
+    try:
+        amount = float(amount)
+    except ValueError:
+        messagebox.showerror("Error", "Amount must be a number.")
+        return
+
+    conn = sqlite3.connect("expenses.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO expenses (date, category, amount, notes) VALUES (?, ?, ?, ?)",
+              (exp_date, category, amount, notes))
+    conn.commit()
+    conn.close()
+
+    messagebox.showinfo("Success", "Expense added successfully!")
+    clear_fields()
+    view_expenses()
+
+# View expenses (all or filtered)
+def view_expenses(filter_date=None, filter_category=None):
+    for row in tree.get_children():
+        tree.delete(row)
+
+    conn = sqlite3.connect("expenses.db")
+    c = conn.cursor()
+
+    query = "SELECT * FROM expenses WHERE 1=1"
+    params = []
+
+    if filter_date:
+        query += " AND date = ?"
+        params.append(filter_date)
+    if filter_category:
+        query += " AND category LIKE ?"
+        params.append(f"%{filter_category}%")
+
+    c.execute(query, params)
+    rows = c.fetchall()
+    conn.close()
+
+    for row in rows:
+        tree.insert("", tk.END, values=row)
+
+# Clear input fields
+def clear_fields():
+    entry_date.delete(0, tk.END)
+    entry_category.delete(0, tk.END)
+    entry_amount.delete(0, tk.END)
+    entry_notes.delete(0, tk.END)
+
+# Search expenses
+def search_expenses():
+    search_date = search_date_entry.get().strip()
+    search_category = search_category_entry.get().strip()
+    view_expenses(filter_date=search_date if search_date else None,
+                  filter_category=search_category if search_category else None)
+
+# GUI setup
+root = tk.Tk()
+root.title("Expense Tracker")
+root.geometry("800x600")
+
+# Input fields
+tk.Label(root, text="Date (YYYY-MM-DD):").grid(row=0, column=0, padx=10, pady=5, sticky="w")
+entry_date = tk.Entry(root)
+entry_date.grid(row=0, column=1, padx=10, pady=5)
+entry_date.insert(0, str(date.today()))
+
+tk.Label(root, text="Category:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
+entry_category = tk.Entry(root)
+entry_category.grid(row=1, column=1, padx=10, pady=5)
+
+tk.Label(root, text="Amount:").grid(row=2, column=0, padx=10, pady=5, sticky="w")
+entry_amount = tk.Entry(root)
+entry_amount.grid(row=2, column=1, padx=10, pady=5)
+
+tk.Label(root, text="Notes:").grid(row=3, column=0, padx=10, pady=5, sticky="w")
+entry_notes = tk.Entry(root)
+entry_notes.grid(row=3, column=1, padx=10, pady=5)
+
+# Buttons
+tk.Button(root, text="Add Expense", command=add_expense).grid(row=4, column=0, padx=10, pady=10)
+tk.Button(root, text="View All Expenses", command=lambda: view_expenses()).grid(row=4, column=1, padx=10, pady=10)
+
+# Search section
+tk.Label(root, text="Search by Date (YYYY-MM-DD):").grid(row=5, column=0, padx=10, pady=5, sticky="w")
+search_date_entry = tk.Entry(root)
+search_date_entry.grid(row=5, column=1, padx=10, pady=5)
+
+tk.Label(root, text="Search by Category:").grid(row=6, column=0, padx=10, pady=5, sticky="w")
+search_category_entry = tk.Entry(root)
+search_category_entry.grid(row=6, column=1, padx=10, pady=5)
+
+tk.Button(root, text="Search", command=search_expenses).grid(row=7, column=0, columnspan=2, pady=10)
+
+# Expense Table
+columns = ("ID", "Date", "Category", "Amount", "Notes")
+tree = ttk.Treeview(root, columns=columns, show="headings", height=15)
+for col in columns:
+    tree.heading(col, text=col)
+    tree.column(col, width=130)
+tree.grid(row=8, column=0, columnspan=2, padx=10, pady=10)
+
+init_db()
+view_expenses()
+
+root.mainloop()
